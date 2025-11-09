@@ -1,0 +1,4 @@
+target 'iOSProject' do 
+  pod 'Masonry'
+  pod 'LookinServer', :configurations => ['Debug']
+end
