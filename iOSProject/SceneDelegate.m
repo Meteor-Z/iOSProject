@@ -7,6 +7,7 @@
 
 #import "SceneDelegate.h"
 #import "ViewController.h"
+#import "AVDemo/KSAudioCaptureViewController.h"
 
 @interface SceneDelegate ()
 
@@ -25,13 +26,12 @@
     UIWindowScene *windowScene = (UIWindowScene *)scene;
     self.window = [[UIWindow alloc] initWithWindowScene:windowScene];
     
-    ViewController *viewController = [[ViewController alloc] init];
-    viewController.title = @"你好";
+    KSAudioCaptureViewController *audioController = [[KSAudioCaptureViewController alloc] init];
     
     
     UITabBarController *tabBarController = [[UITabBarController alloc] init];
     tabBarController.viewControllers = @[
-         [[UINavigationController alloc] initWithRootViewController:viewController],
+         [[UINavigationController alloc] initWithRootViewController:audioController],
      ];
     self.window.rootViewController = tabBarController;
     [self.window makeKeyAndVisible];
