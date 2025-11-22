@@ -13,7 +13,7 @@
     KSAudioConfig *config = [[KSAudioConfig alloc] init];
     config.channels = 2;
     config.sampleRate = 44100;
-    config.bitDepth = 16;
+    config.bitDepth = 32;
     return config;
 }
 @end

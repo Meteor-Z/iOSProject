@@ -47,7 +47,12 @@
 - (void)setupAudioSession {
     NSError *error = nil;
     AVAudioSession *session = [AVAudioSession sharedInstance];
-    [session setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionMixWithOthers | AVAudioSessionCategoryOptionDefaultToSpeaker error:&error];
+    /*
+     AVAudioSessionCategoryOptionAllowBluetooth
+    */
+    [session setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionMixWithOthers | AVAudioSessionCategoryOptionDefaultToSpeaker |
+        AVAudioSessionCategoryOptionAllowBluetooth
+                   error:&error];
     if (error) {
         NSLog(@"AVAudioSession is error");
         return;
