@@ -13,6 +13,9 @@
 #import "AVFoundation/AVFoundation.h"
 #import "memory.h"
 
+#define kInputBus 1
+#define kOutputBus 0
+
 @interface KSAudioCapture ()
 
 @property (nonatomic, assign) AudioComponentInstance audioCaptureInstace; // 音频采集的实例
@@ -102,6 +105,7 @@
 #pragma mark - 工具类
 
 - (void)setupAudioCaptureInstace:(NSError **)error {
+    // 找对应的AudioUnit
     AudioComponentDescription ioUnitDescription;
     ioUnitDescription.componentType = kAudioUnitType_Output;
     ioUnitDescription.componentSubType = kAudioUnitSubType_RemoteIO;
@@ -124,25 +128,25 @@
     status = AudioUnitSetProperty(_audioCaptureInstace,
                                   kAudioOutputUnitProperty_EnableIO,
                                   kAudioUnitScope_Input,
-                                  1,
+                                  kInputBus,
                                   &flagOne,
                                   sizeof(flagOne));
     if (status != noErr) {
         *error = [NSError errorWithDomain:NSStringFromClass(self.class) code:status userInfo:nil];
-        NSLog(@"打开音频输入");
+        NSLog(@"这里哈哈哈哈哈");
         return;
     }
 
     status = AudioUnitSetProperty(_audioCaptureInstace,
                                   kAudioOutputUnitProperty_EnableIO,
                                   kAudioUnitScope_Output,
-                                  0,
+                                  kOutputBus,
                                   &flagOne,
                                   sizeof(flagOne));
     
     if (status != noErr) {
         *error = [NSError errorWithDomain:NSStringFromClass(self.class) code:status userInfo:nil];
-        NSLog(@"打开音频输入");
+        NSLog(@"寄了");
         return;
     }
 
@@ -156,6 +160,7 @@
     asbd.mBytesPerPacket = asbd.mFramesPerPacket * asbd.mBytesPerFrame; // 每个包字节数
     asbd.mSampleRate = self.config.sampleRate;
     self.audioFormat = asbd;
+
     
     // 设置扬声器，采集回来的数据的声音
     status = AudioUnitSetProperty(_audioCaptureInstace,
@@ -175,26 +180,47 @@
     callBack.inputProcRefCon = (__bridge void *)self;
     callBack.inputProc = audioBufferCallBack;
     
-    UInt32 maxFrams = 2048;
-    self.inputBufferList = [self createAudioBufferListWithFrameCount:maxFrams];
     
     // 设置callback
     status = AudioUnitSetProperty(_audioCaptureInstace,
                                   kAudioOutputUnitProperty_SetInputCallback,
-                                  kAudioUnitScope_Global, 1,
+                                  kAudioUnitScope_Output,
+                                  kInputBus,
                                   &callBack,
                                   sizeof(callBack));
     
     if (status != noErr) {
         *error = [NSError errorWithDomain:NSStringFromClass(self.class) code:status userInfo:nil];
-        return;
-    }
-    status = AudioUnitInitialize(_audioCaptureInstace);
-    if (status != noErr) {
-        *error = [NSError errorWithDomain:NSStringFromClass(self.class) code:status userInfo:nil];
+        NSLog(@"不中");
         return;
     }
     
+    
+    // 设置输出回调
+    AURenderCallbackStruct renderCallBack;
+    renderCallBack.inputProc = audioRenderCallback;
+    renderCallBack.inputProcRefCon = (__bridge void *)self;
+    
+    status = AudioUnitSetProperty(_audioCaptureInstace,
+                                  kAudioUnitProperty_SetRenderCallback,
+                                  kAudioUnitScope_Input,    // 注意：Input scope for output bus
+                                  kOutputBus,
+                                  &renderCallBack,
+                                  sizeof(renderCallBack));
+    
+    if (status != noErr) {
+        *error = [NSError errorWithDomain:NSStringFromClass(self.class) code:status userInfo:nil];
+        NSLog(@"这里出错");
+        return;
+    }
+    
+    
+    status = AudioUnitInitialize(_audioCaptureInstace);
+    if (status != noErr) {
+        *error = [NSError errorWithDomain:NSStringFromClass(self.class) code:status userInfo:nil];
+        NSLog(@"寄了");
+        return;
+    }
     
 }
 
@@ -206,68 +232,96 @@ static OSStatus audioBufferCallBack(void *inRefCon,
                                     UInt32 inBusNumber,
                                     UInt32 inNumberFrames,
                                     AudioBufferList *ioData) {
-    
     @autoreleasepool {
         KSAudioCapture *capture = (__bridge KSAudioCapture *)inRefCon;
         if (!capture) {
-            return - 1;
-        }
-        if (ioData == NULL) {
             return -1;
         }
-        UInt32 neededBytes = inNumberFrames * capture.audioFormat.mBytesPerFrame;
-        if (capture.inputBufferList->mBuffers[0].mDataByteSize < neededBytes) {
-            [capture freeAudioBufferList:capture.inputBufferList];
-            capture.inputBufferList = [capture createAudioBufferListWithFrameCount:inNumberFrames];
-        }
-        // 从麦克风中获取数据
-        OSStatus status = AudioUnitRender(capture.audioCaptureInstace,
-                                          ioActionFlags,
-                                          inTimeStamp,
-                                          1, // 从麦克风输入 bus 1 取数据
-                                          inNumberFrames,
-                                          capture.inputBufferList);
-        if (status != noErr) {
-            for (UInt32 i = 0; i < ioData->mNumberBuffers; i++) {
-                memset(ioData->mBuffers[i].mData, 0, ioData->mBuffers[i].mDataByteSize);
-            }
-            return status;
-        }
-
-            // 2. 做耳返（input → output）
-        UInt32 inBufs  = capture.inputBufferList->mNumberBuffers;
-        UInt32 outBufs = ioData->mNumberBuffers;
-
-        UInt32 copyBufs = MIN(inBufs, outBufs);
-
-        for (UInt32 i = 0; i < copyBufs; i++) {
-            
-            void *inPtr = capture.inputBufferList->mBuffers[i].mData;
-            void *outPtr = ioData->mBuffers[i].mData;
-            
-            UInt32 inSize  = capture.inputBufferList->mBuffers[i].mDataByteSize;
-            UInt32 outSize = ioData->mBuffers[i].mDataByteSize;
-            
-            if (!inPtr || !outPtr || inSize == 0 || outSize == 0) {
-                continue;
-            }
-            
-            UInt32 copySize = MIN(inSize, outSize);
-            memcpy(outPtr, inPtr, copySize);
-        }
         
-        if (capture.sampleBufferOutputCallBack) {
-            CMSampleBufferRef sampleBuffer = [KSAudioCapture sampleBufferFromAudioBufferList:*capture.inputBufferList
-                                                                                 inTimeStamp:inTimeStamp
-                                                                              inNumberFrames:inNumberFrames
-                                                                                 description:capture.audioFormat];
-            if (sampleBuffer) {
+        AudioBuffer buffer;
+        
+        buffer.mNumberChannels = 1;
+        buffer.mData = NULL;
+        buffer.mDataByteSize = 0;
+        
+        UInt32 bufferSize = inNumberFrames * capture.audioFormat.mBytesPerFrame;
+        void *data = malloc(bufferSize);
+        
+        AudioBufferList bufferList;
+        bufferList.mNumberBuffers = 1;
+        bufferList.mBuffers[0].mNumberChannels = capture.audioFormat.mChannelsPerFrame;
+        bufferList.mBuffers[0].mData = data;
+        bufferList.mBuffers[0].mDataByteSize = bufferSize;
+        
+        OSStatus stats = AudioUnitRender(capture.audioCaptureInstace,
+                                         ioActionFlags,
+                                         inTimeStamp,
+                                         inBusNumber,
+                                         inNumberFrames,
+                                         &bufferList);
+        if (stats == noErr) {
+            
+            NSLog(@"zechen 输入相关的 =%p", capture.inputBufferList);
+            if (!capture.inputBufferList) {
+                capture.inputBufferList = malloc(sizeof(AudioBufferList));
+                capture.inputBufferList->mNumberBuffers = 1;
+                capture.inputBufferList->mBuffers[0].mNumberChannels = capture.audioFormat.mChannelsPerFrame;
+                capture.inputBufferList->mBuffers[0].mData = malloc(bufferSize);
+                NSLog(@"mnumberBuffers =  %@", @(capture.inputBufferList->mNumberBuffers));
+            }
+            
+            if (bufferList.mBuffers[0].mData) {
+                NSLog(@"有数据");
+            }
+            memcpy(capture.inputBufferList->mBuffers[0].mData,
+                          bufferList.mBuffers[0].mData,
+                   bufferSize);
+            
+            CMSampleBufferRef sampleBuffer = [KSAudioCapture sampleBufferFromAudioBufferList:bufferList
+                                                                                 inTimeStamp:inTimeStamp inNumberFrames:inNumberFrames description:capture.audioFormat];
+            if (capture.sampleBufferOutputCallBack) {
                 capture.sampleBufferOutputCallBack(sampleBuffer);
+            }
+            if (sampleBuffer) {
                 CFRelease(sampleBuffer);
             }
         }
+        
+        return stats;
+        
     }
+    
+}
+
+static OSStatus audioRenderCallback(void *inRefCon,
+                                    AudioUnitRenderActionFlags *ioActionFlags,
+                                    const AudioTimeStamp *inTimeStamp,
+                                    UInt32 inBusNumber,
+                                    UInt32 inNumberFrames,
+                                    AudioBufferList *ioData) {
+    NSLog(@"inBusNumber = %@", @(inBusNumber));
+    KSAudioCapture *capture = (__bridge KSAudioCapture *)inRefCon;
+    if (!capture) {
+        return -1;
+    }
+    
+    if (!capture.inputBufferList || capture.inputBufferList->mBuffers[0].mDataByteSize == 0) {
+        // 清空输出
+        for (UInt32 i = 0; i < ioData->mNumberBuffers; i++) {
+            memset(ioData->mBuffers[i].mData, 0, ioData->mBuffers[i].mDataByteSize);
+            ioData->mBuffers[i].mDataByteSize = 0;
+        }
+        NSLog(@"寄了");
+        return -1;
+    }
+    NSLog(@"RenderCallBack");
+    UInt32 copyBytes = MIN(ioData->mBuffers[0].mDataByteSize, capture.inputBufferList->mBuffers[0].mDataByteSize);
+    memcpy(ioData->mBuffers[0].mData, capture.inputBufferList->mBuffers[0].mData, copyBytes);;
+    ioData->mBuffers[0].mDataByteSize = copyBytes;;
+    
+    capture.inputBufferList = nil;
     return noErr;
+    
 }
 
 
@@ -310,28 +364,6 @@ static OSStatus audioBufferCallBack(void *inRefCon,
     
 }
 
-- (AudioBufferList *)createAudioBufferListWithFrameCount:(UInt32)inNumberFrames {
-    UInt32 bytesPerFrame = (self.audioFormat.mBitsPerChannel / 8) * self.audioFormat.mChannelsPerFrame;
-    UInt32 bufferBytesSize = inNumberFrames * bytesPerFrame;
-    
-    AudioBufferList *abl = (AudioBufferList *)malloc(sizeof(AudioBufferList) + sizeof(AudioBuffer) * (1 - 1));
-    abl->mNumberBuffers = 1;
-    abl->mBuffers[0].mNumberChannels = self.audioFormat.mChannelsPerFrame;
-    abl->mBuffers[0].mDataByteSize = bufferBytesSize;
-    abl->mBuffers[0].mData = malloc(bufferBytesSize);
-    return abl;
-}
 
-- (void)freeAudioBufferList:(AudioBufferList *)abl {
-    if (!abl) {
-        return;
-    }
-    if (abl->mNumberBuffers >0 && abl->mBuffers[0].mData) {
-        free(abl->mBuffers[0].mData);
-    }
-    free(abl);
-    
-    
-}
 
 @end

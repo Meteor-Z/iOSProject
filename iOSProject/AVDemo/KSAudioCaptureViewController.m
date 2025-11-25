@@ -50,9 +50,10 @@
     /*
      AVAudioSessionCategoryOptionAllowBluetooth
     */
-    [session setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionMixWithOthers | AVAudioSessionCategoryOptionDefaultToSpeaker |
-        AVAudioSessionCategoryOptionAllowBluetooth
+    [session setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionAllowBluetooth
                    error:&error];
+//    [sessionsetPreferredIOBufferDuration:0.05 error:&error];
+    [session setPreferredIOBufferDuration:0.05 error:&error];
     if (error) {
         NSLog(@"AVAudioSession is error");
         return;
