@@ -52,6 +52,7 @@
     */
     [session setCategory:AVAudioSessionCategoryPlayAndRecord withOptions:AVAudioSessionCategoryOptionAllowBluetooth
                    error:&error];
+//    [session setCategory:AVAudioSessionCategorySoloAmbient error:&error];
 //    [sessionsetPreferredIOBufferDuration:0.05 error:&error];
     [session setPreferredIOBufferDuration:0.05 error:&error];
     if (error) {

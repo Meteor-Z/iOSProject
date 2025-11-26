@@ -278,7 +278,8 @@ static OSStatus audioBufferCallBack(void *inRefCon,
                    bufferSize);
             capture.inputBufferList->mBuffers[0].mDataByteSize = bufferSize;
             
-            NSLog(@"当前的数据 是否有= %p", capture.inputBufferList);
+            
+            NSLog(@"当前的数据 是否有= %p, 数据大小是 = %@", capture.inputBufferList, @(bufferSize));
             
             CMSampleBufferRef sampleBuffer = [KSAudioCapture sampleBufferFromAudioBufferList:bufferList
                                                                                  inTimeStamp:inTimeStamp inNumberFrames:inNumberFrames description:capture.audioFormat];
@@ -320,9 +321,10 @@ static OSStatus audioRenderCallback(void *inRefCon,
         return -1;
     }
     NSLog(@"RenderCallBack");
-    UInt32 copyBytes = MIN(ioData->mBuffers[0].mDataByteSize, capture.inputBufferList->mBuffers[0].mDataByteSize);
-    memcpy(ioData->mBuffers[0].mData, capture.inputBufferList->mBuffers[0].mData, copyBytes);;
-    ioData->mBuffers[0].mDataByteSize = copyBytes;;
+    UInt32 copyBytes = capture.inputBufferList->mBuffers[0].mDataByteSize;
+    NSLog(@"当前的copyByts = %@", @(copyBytes));
+//    memcpy(ioData->mBuffers[0].mData, capture.inputBufferList->mBuffers[0].mData, copyBytes);;
+//    ioData->mBuffers[0].mDataByteSize = copyBytes;;
     
     capture.inputBufferList = nil;
     return noErr;
